@@ -1,0 +1,14 @@
+body {
+    background: black;
+}
+#canvas {
+    width: calc(144*4px);
+    height: calc(144*4px);
+    border: 4px dashed black;
+    margin: auto;
+    display: block;
+    background: #a4a4a4;
+}
+a{
+    color:#494949;
+}
