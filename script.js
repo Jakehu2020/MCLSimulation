@@ -55,7 +55,7 @@ const mcl = new MCL(r, ghostRobot, {
     adaptive:      false,
 });
 let p = [Math.random() * 144,Math.random() * 144];
-const waypoints = Array(12).fill``.map(x=>[Math.random() * 144,Math.random() * 144]);
+const waypoints = Array(3).fill``.map(x=>[Math.random() * 144,Math.random() * 144]);
 const path      = bezierPath(waypoints, { resolution: 24, tension: 0.4 });
 r.state   = { index: 0 };
 // r.target = path;
