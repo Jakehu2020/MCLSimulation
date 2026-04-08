@@ -3,16 +3,204 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simulation</title>
+    <title>Robot Sim</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <canvas id="canvas"></canvas>
-    <script src="util.js"></script>
-    <script src="controller.js"></script>
-    <script src="distance.js"></script>
-    <script src="mcl.js"></script>
-    <script src="robot.js"></script>
-    <script src="script.js"></script>
+
+<div id="app">
+
+    <!-- ── CANVAS ─────────────────────────────────────────────────── -->
+    <div id="canvas-wrap">
+        <canvas id="canvas"></canvas>
+        <div id="mode-badge" class="hidden"></div>
+    </div>
+
+    <!-- ── SIDEBAR ───────────────────────────────────────────────── -->
+    <aside id="panel">
+
+        <div id="panel-header">
+            <span class="logo-text">ROBOSIM</span>
+            <span id="fps-counter">-- fps</span>
+        </div>
+
+        <!-- TELEMETRY -->
+        <section class="panel-section">
+            <div class="section-label">TELEMETRY</div>
+            <div class="telem-grid">
+                <div class="telem-cell">
+                    <span class="telem-label">X</span>
+                    <span class="telem-val" id="tX">0.00</span>
+                    <span class="telem-unit">in</span>
+                </div>
+                <div class="telem-cell">
+                    <span class="telem-label">Y</span>
+                    <span class="telem-val" id="tY">0.00</span>
+                    <span class="telem-unit">in</span>
+                </div>
+                <div class="telem-cell">
+                    <span class="telem-label">θ</span>
+                    <span class="telem-val" id="tTheta">0.00</span>
+                    <span class="telem-unit">°</span>
+                </div>
+                <div class="telem-cell">
+                    <span class="telem-label">SPD</span>
+                    <span class="telem-val" id="tSpeed">0.00</span>
+                    <span class="telem-unit">u/t</span>
+                </div>
+            </div>
+            <div class="telem-bar-wrap">
+                <div class="telem-bar-label">L</div>
+                <div class="telem-bar-track"><div class="telem-bar" id="barL"></div></div>
+                <div class="telem-bar-label">R</div>
+                <div class="telem-bar-track"><div class="telem-bar" id="barR"></div></div>
+            </div>
+        </section>
+
+        <!-- CONTROLLER -->
+        <section class="panel-section">
+            <div class="section-label">CONTROLLER</div>
+            <div class="controller-grid" id="controllerGrid">
+                <button class="ctrl-btn active" data-ctrl="MTP" title="Point controller (SET TARGET)">MTP</button>
+                <button class="ctrl-btn" data-ctrl="purePursuit" title="Path controller (RUN PATH)">PURSUIT</button>
+                <button class="ctrl-btn" data-ctrl="ramsete" title="Point controller (SET TARGET)">RAMSETE</button>
+                <button class="ctrl-btn" data-ctrl="stanley" title="Point controller (SET TARGET)">STANLEY</button>
+            </div>
+            <div id="ctrlHint" style="font-size:9px;color:var(--label);margin-top:5px;text-align:center;letter-spacing:.05em">
+                needs: <span id="ctrlNeed" style="color:var(--accent2)">SET TARGET</span>
+            </div>
+        </section>
+
+        <!-- DRIVE MODE -->
+        <section class="panel-section">
+            <div class="section-label">DRIVE MODE</div>
+            <div class="mode-row">
+                <button class="mode-btn active" id="btnManual">MANUAL</button>
+                <button class="mode-btn" id="btnAuton">AUTON</button>
+            </div>
+            <div class="key-hint" id="keyHint">
+                <div class="key-row"><kbd>W</kbd><kbd>S</kbd> straight &nbsp;·&nbsp; <kbd>A</kbd><kbd>D</kbd> arc</div>
+                <div class="key-row" style="margin-top:3px"><kbd>Q</kbd><kbd>E</kbd> point turn</div>
+            </div>
+        </section>
+
+        <!-- TARGET / PATH -->
+        <section class="panel-section">
+            <div class="section-label">PATH / TARGET</div>
+            <div class="action-row">
+                <button class="action-btn" id="btnSetTarget">SET TARGET</button>
+                <button class="action-btn" id="btnAddWaypoint">ADD WPT</button>
+            </div>
+            <div class="action-row" style="margin-top:6px">
+                <button class="action-btn" id="btnRunPath">RUN PATH</button>
+                <button class="action-btn danger" id="btnClearPath">CLEAR</button>
+            </div>
+            <div class="wpt-count" id="wptCount">0 waypoints</div>
+        </section>
+
+        <!-- TOGGLES -->
+        <section class="panel-section">
+            <div class="section-label">VISIBILITY</div>
+            <div class="toggle-list">
+                <label class="toggle-row">
+                    <span class="toggle-name">Raycasting</span>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="togSensors" checked>
+                        <span class="toggle-slider"></span>
+                    </div>
+                </label>
+                <label class="toggle-row">
+                    <span class="toggle-name">Path spline</span>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="togPath" checked>
+                        <span class="toggle-slider"></span>
+                    </div>
+                </label>
+                <label class="toggle-row">
+                    <span class="toggle-name">Waypoints</span>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="togWaypoints" checked>
+                        <span class="toggle-slider"></span>
+                    </div>
+                </label>
+                <label class="toggle-row">
+                    <span class="toggle-name">Lookahead ring</span>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="togLookahead" checked>
+                        <span class="toggle-slider"></span>
+                    </div>
+                </label>
+                <label class="toggle-row">
+                    <span class="toggle-name">MCL particles</span>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="togMCL">
+                        <span class="toggle-slider"></span>
+                    </div>
+                </label>
+                <label class="toggle-row">
+                    <span class="toggle-name">Ghost robot</span>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="togGhost">
+                        <span class="toggle-slider"></span>
+                    </div>
+                </label>
+            </div>
+        </section>
+
+        <!-- MCL PARAMS -->
+        <section class="panel-section" id="mclParams" style="display:none">
+            <div class="section-label">MCL PARAMS</div>
+            <div class="param-row">
+                <span class="param-label">Particles</span>
+                <input class="param-input" type="number" id="mclParticles" value="300" min="50" max="1000" step="50">
+            </div>
+            <div class="param-row">
+                <span class="param-label">Sensor σ</span>
+                <input class="param-input" type="number" id="mclSigma" value="2" min="0.5" max="10" step="0.5">
+            </div>
+            <div class="param-row">
+                <span class="param-label">Smoothing</span>
+                <input class="param-input" type="number" id="mclSmoothing" value="0.25" min="0" max="0.98" step="0.05">
+            </div>
+            <div class="param-row">
+                <span class="param-label">Jump limit</span>
+                <input class="param-input" type="number" id="mclJump" value="12" min="2" max="60" step="1">
+            </div>
+            <button class="action-btn" id="btnResetMCL" style="width:100%;margin-top:6px">RESET MCL</button>
+        </section>
+
+        <!-- ROBOT PARAMS -->
+        <section class="panel-section">
+            <div class="section-label">ROBOT PARAMS</div>
+            <div class="param-row">
+                <span class="param-label">Drive noise</span>
+                <div style="display:flex;align-items:center;gap:6px">
+                    <input type="range" id="noiseSlider" min="0" max="0.5" step="0.01" value="0.05" style="width:80px;accent-color:var(--accent)">
+                    <span class="telem-val" id="noiseVal" style="font-size:11px;min-width:32px">0.05</span>
+                </div>
+            </div>
+            <div class="param-row">
+                <span class="param-label">Max speed</span>
+                <input class="param-input" type="number" id="maxSpeedInput" value="8" min="1" max="20" step="1">
+            </div>
+        </section>
+
+        <!-- RESET -->
+        <section class="panel-section">
+            <button class="action-btn danger" id="btnResetRobot" style="width:100%">RESET ROBOT</button>
+        </section>
+
+    </aside>
+</div>
+
+<script src="util.js"></script>
+<script src="controller.js"></script>
+<script src="distance.js"></script>
+<script src="mcl.js"></script>
+<script src="robot.js"></script>
+<script src="script.js"></script>
 </body>
 </html>

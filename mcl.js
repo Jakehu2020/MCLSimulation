@@ -88,9 +88,13 @@ class MCL {
         motionNoise    = { x: 0.8, y: 0.8, theta: 0.04 },  // per-tick std-dev
         sensorSigma    = 10,        // Gaussian sensor model std-dev (inches)
         injectionRate  = 0.03,      // fraction of random particles injected each cycle
-        injectionSpreadX     = 72,  // spread of injected particles (whole field by default)
-        injectionSpreadY     = 72,
-        injectionSpreadTheta = Math.PI,
+        injectionSpreadX     = 10,  // tight spread around odometry (inches)
+        injectionSpreadY     = 10,
+        injectionSpreadTheta = 0.3, // ~17° tight heading spread
+        injectionWideFrac    = 0.2, // fraction of injected particles that go wide (recovery)
+        injectionWideScale   = 6,   // multiplier for wide injection spread
+        smoothingAlpha       = 0.25, // EMA smoothing on estimate (0=instant, 1=frozen)
+        jumpThreshold        = 12,  // inches — jumps larger than this get extra damping
         particleArrowLen = 6,       // pixels, heading arrow on each particle
         showArrows     = true,
         showDots       = true,
@@ -114,6 +118,10 @@ class MCL {
         this.injectionSpread = {
             x: injectionSpreadX, y: injectionSpreadY, theta: injectionSpreadTheta
         };
+        this.injectionWideFrac  = injectionWideFrac;
+        this.injectionWideScale = injectionWideScale;
+        this.smoothingAlpha     = smoothingAlpha;
+        this.jumpThreshold      = jumpThreshold;
         this.particleArrowLen = particleArrowLen;
         this.showArrows   = showArrows;
         this.showDots     = showDots;
@@ -258,14 +266,25 @@ class MCL {
             newParticles.push({ ...this.particles[i] });
         }
 
-        // Random injection spread across the field
-        const cx = this.estimate_.x, cy = this.estimate_.y, ct = this.robot.theta;
-        for (let j = 0; j < inject; j++) {
+        // Injection split: most particles near odometry (tracking), a few wide (recovery)
+        const cx  = this.robot.pos[0], cy  = this.robot.pos[1], ct = this.robot.theta;
+        const wideCount = Math.floor(inject * this.injectionWideFrac);
+        const nearCount = inject - wideCount;
+        for (let j = 0; j < nearCount; j++) {
             newParticles.push(this._randomParticleNear(
                 cx, cy, ct,
-                this.injectionSpread.x,
+                this.injectionSpread.x,      // tight: ~10 in
                 this.injectionSpread.y,
                 this.injectionSpread.theta
+            ));
+        }
+        for (let j = 0; j < wideCount; j++) {
+            // Wide particles: scattered across the full field for kidnap recovery
+            newParticles.push(this._randomParticleNear(
+                cx, cy, ct,
+                this.injectionSpread.x * this.injectionWideScale,
+                this.injectionSpread.y * this.injectionWideScale,
+                Math.PI
             ));
         }
 
@@ -281,19 +300,36 @@ class MCL {
      * Sets ghost robot pose so it tracks the estimate live.
      */
     computeEstimate() {
-        let x = 0, y = 0, sinSum = 0, cosSum = 0;
+        let wx = 0, wy = 0, sinSum = 0, cosSum = 0;
         for (const p of this.particles) {
-            x       += p.x     * p.weight;
-            y       += p.y     * p.weight;
+            wx      += p.x     * p.weight;
+            wy      += p.y     * p.weight;
             sinSum  += Math.sin(p.theta) * p.weight;
             cosSum  += Math.cos(p.theta) * p.weight;
         }
-        this.estimate_ = { x, y, theta: this.robot.theta }// Math.atan2(sinSum, cosSum) };
+        const rawTheta = Math.atan2(sinSum, cosSum);
+
+        // Jump filter: if the raw estimate leaps more than jumpThreshold,
+        // increase smoothing so extreme outlier frames don't snap the ghost.
+        const jump  = Math.hypot(wx - this.estimate_.x, wy - this.estimate_.y);
+        const tJump = Math.abs(wrapAngle(rawTheta - this.estimate_.theta));
+
+        let alpha = this.smoothingAlpha;   // base EMA: 0 = instant, 1 = frozen
+        if (jump > this.jumpThreshold) {
+            // Scale alpha up toward 0.98 the bigger the jump
+            alpha = Math.min(0.98, alpha + (1 - alpha) * (jump / this.jumpThreshold - 1) * 0.5);
+        }
+
+        const newX     = this.estimate_.x * alpha + wx     * (1 - alpha);
+        const newY     = this.estimate_.y * alpha + wy     * (1 - alpha);
+        const newTheta = wrapAngle(this.estimate_.theta * alpha + rawTheta * (1 - alpha));
+
+        this.estimate_ = { x: newX, y: newY, theta: newTheta };
 
         if (this.showEstimate) {
-            this.ghost.pos[0] = x;
-            this.ghost.pos[1] = y;
-            this.ghost.theta  = this.estimate_.theta;
+            this.ghost.pos[0] = newX;
+            this.ghost.pos[1] = newY;
+            this.ghost.theta  = newTheta;
         }
     }
 
